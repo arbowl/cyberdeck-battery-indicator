@@ -8,7 +8,12 @@ from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QMutex
 import RPi.GPIO as GPIO
 
 
-class Worker(QObject):
+class BatteryPoller(QObject):
+    """The threaded worker object which polls the battery in the background
+
+    Args:
+        QObject (_type_): PyQt5 compatibility object
+    """
     finished = pyqtSignal()
     update_tray = pyqtSignal(bool, float, float)
     
@@ -18,12 +23,20 @@ class Worker(QObject):
         self._mutex = QMutex()
         self.update_tray.connect(update_battery_status)
     
+    @pyqtSlot
     def stop(self) -> None:
+        """Updates the mutex if the app is closed
+        """
         self._mutex.lock()
         self.is_running = False
         self._mutex.unlock()
         
     def is_running(self) -> bool:
+        """Determines if the user stopped the thread
+
+        Returns:
+            bool: Status of _is_running
+        """
         try:
             self._mutex.lock()
             return self._is_running
@@ -31,6 +44,8 @@ class Worker(QObject):
             self._mutex.unlock()
 
     def run(self) -> None:
+        """Every second, polls the voltage, charge, and charging status
+        """
         while self._is_running:
             charging_status = GPIO.input(GPIO_PWR_PORT)
             
@@ -51,19 +66,32 @@ class Worker(QObject):
 
 
 def update_battery_status(battery_charging: bool, voltage: float, percent: float) -> None:
+    """Updates the GUI according to the charging status and battery capacity
+
+    Args:
+        battery_charging (bool): If the battery is charging it will show a charge symbol
+        voltage (float): The actual voltage of the battery
+        percent (float): The converted estimated percent of the battery capacity
+    """
     volts = round(voltage, 2)
     charge = round(percent, 1)
+    # If the battery isn't charging...
     if not battery_charging:
-        icon_to_display = ceil(voltage / (100 / 7))
+        # ...show the % if it's > 20,...
+        if charge >= 20:
+            icon_to_display = ceil(voltage / (100 / 7))
+        # ...or a danger symbol to prompt the user to charge
+        else:
+            icon_to_display = 9
+    # If the battery is charging, show a charge icon
     else:
-        icon_to_display = icons[8]
-    tray_icon.setIcon(icons[icon_to_display])
-    hover_info = str(charge) + '% ' + str(volts) + 'V'
-    tray_icon.setToolTip(hover_info)
+        icon_to_display = 8
+    tray_icon.setIcon(battery_icons[icon_to_display])
+    tray_icon.setToolTip(str(charge) + '% ' + str(volts) + 'V')
 
 
 if __name__ == '__main__':
-    icons = [
+    battery_icons = [
             QIcon('battery_0.png'),
             QIcon('battery_1.png'),
             QIcon('battery_2.png'),
@@ -76,6 +104,7 @@ if __name__ == '__main__':
             QIcon('battery_alert.png')
     ]
     
+    # x728 UPS defaults
     I2C_ADDR = 0x36
     GPIO_BATT_PORT = 13
     GPIO_PWR_PORT = 6
@@ -85,29 +114,31 @@ if __name__ == '__main__':
     GPIO.setup(GPIO_BATT_PORT, GPIO.IN)
     GPIO.setwarnings(False)
     
+    # Create the application and tray icon
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    
     tray_icon = QSystemTrayIcon()
-    tray_icon.setIcon(icons[10])
+    tray_icon.setIcon(battery_icons[9])
     tray_icon.setVisible(True)
 
-    thread = QThread()
-    worker = Worker()
-    worker.moveToThread(thread)
-    thread.started.connect(worker.run)
-    worker.finished.connect(thread.quit)
-    worker.finished.connect(worker.deleteLater)
-    worker.finished.connect(app.quit)
-    thread.finished.connect(thread.deleteLater)
-    worker.update_tray.connect(update_battery_status)
-    thread.start()
+    # Create the worker thread
+    polling_thread = QThread()
+    battery_worker = BatteryPoller()
+    battery_worker.moveToThread(polling_thread)
+    polling_thread.started.connect(battery_worker.run)
+    battery_worker.finished.connect(polling_thread.quit)
+    battery_worker.finished.connect(battery_worker.deleteLater)
+    battery_worker.finished.connect(app.quit)
+    polling_thread.finished.connect(polling_thread.deleteLater)
+    battery_worker.update_tray.connect(update_battery_status)
+    polling_thread.start()
 
-    # Create the menu
+    # Create the clickable menu
     menu = QMenu()
     quit = QAction('Exit')
-    quit.triggered.connect(worker.stop)
+    quit.triggered.connect(battery_worker.stop)
     menu.addAction(quit)
     tray_icon.setContextMenu(menu)
 
-    app.exec_()
+    # Start the execution loop
+    app.exec()
