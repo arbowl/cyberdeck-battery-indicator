@@ -24,7 +24,7 @@ class BatteryPoller(QObject):
         self.update_tray.connect(update_battery_status)
     
     @pyqtSlot
-    def stop(self) -> None:
+    def stop(self):
         """Updates the mutex if the app is closed
         """
         self._mutex.lock()
