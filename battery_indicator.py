@@ -48,6 +48,7 @@ class BatteryPoller(QObject):
     def run(self):
         """Every second, polls the voltage, charge, and charging status
         """
+        battery_queue = []
         while self._is_running:
             charging_status = GPIO.input(GPIO_PWR_PORT)
             
@@ -60,14 +61,24 @@ class BatteryPoller(QObject):
             battery_capacity = charge_in_bytes / 256
             if battery_capacity > 100:
                 battery_capacity = 100
-
-            self.update_tray.emit(charging_status, battery_voltage, battery_capacity)
+                
+            if len(battery_queue) <= 300:
+                battery_queue.append(battery_capacity)
+            else:
+                battery_queue.pop(0)
+                battery_queue.append(battery_capacity)
+            time_remaining = (battery_queue[0] - battery_queue[-1]) / len(battery_queue) * 60
+            if time_remaining == 0:
+                time_remaining = 0.2
+            time_remaining = battery_capacity / time_remaining
+            
+            self.update_tray.emit(charging_status, battery_voltage, battery_capacity, time_remaining)
             time.sleep(1)
             
         self.finished.emit()
 
 
-def update_battery_status(on_battery_power, voltage, percent):
+def update_battery_status(on_battery_power, voltage, percent, time):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
@@ -80,11 +91,21 @@ def update_battery_status(on_battery_power, voltage, percent):
     # If the battery isn't charging...
     if on_battery_power:
         icon_to_display = ceil(charge / (100 / 7))
+        time_left = int(round(time, 0))
+        if time_left < 60:
+            time_left = str(time_left) + ' min'
+        else:
+            hours_left = str(int(round(time_left / 60, 0)))
+            minutes_left = str(int(round(time_left % 60, 0)))
+            if len(minutes_left) == 1:
+                minutes_left = '0' + minutes_left
+            time_left = hours_left + ':' + minutes_left + ' hrs'
     # If the battery is charging, show a charge icon
     else:
         icon_to_display = 8
+        time_left = 'Charging'
     tray_icon.setIcon(battery_icons[icon_to_display])
-    tray_icon.setToolTip(str(charge) + '%, ' + str(volts) + 'V')
+    tray_icon.setToolTip(str(charge) + '%, ' + str(volts) + 'V, ' + time_left)
     
     if volts < 3.00:
         icon_to_display = 9
