@@ -80,7 +80,7 @@ class BatteryPoller(QObject):
             
             # Updates the GUI
             self.update_tray.emit(battery_power, battery_voltage, battery_capacity, time_remaining)
-            time.sleep(1)
+            sleep(1)
             
         self.finished.emit()
 
