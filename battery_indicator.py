@@ -49,7 +49,7 @@ class BatteryPoller(QObject):
         """Every second, polls the voltage, charge, and charging status
         """
         battery_queue = []
-        while self._is_running:
+        while self.is_running():
             # True if the battery is being used (resets battery drain calc as well)
             battery_power = GPIO.input(GPIO_PWR_PORT)
             if not battery_power:
