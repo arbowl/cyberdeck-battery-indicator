@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QMutex
 import RPi.GPIO as GPIO
 
+app = QApplication([])
 
 class BatteryPoller(QObject):
     """The threaded worker object which polls the battery in the background
@@ -64,7 +65,7 @@ class BatteryPoller(QObject):
         self.finished.emit()
 
 
-def update_battery_status(battery_charging: bool, voltage: float, percent: float):
+def update_battery_status(battery_charging, voltage, percent):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
@@ -110,11 +111,10 @@ if __name__ == '__main__':
     bus = smbus.SMBus(1)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(GPIO_BATT_PORT, GPIO.OUT)
-    GPIO.setup(GPIO_BATT_PORT, GPIO.IN)
+    GPIO.setup(GPIO_PWR_PORT, GPIO.IN)
     GPIO.setwarnings(False)
     
     # Create the application and tray icon
-    app = QApplication([])
     app.setQuitOnLastWindowClosed(False)
     tray_icon = QSystemTrayIcon()
     tray_icon.setIcon(battery_icons[9])
@@ -126,10 +126,8 @@ if __name__ == '__main__':
     battery_worker.moveToThread(polling_thread)
     polling_thread.started.connect(battery_worker.run)
     battery_worker.finished.connect(polling_thread.quit)
+    battery_worker.finished.connect(polling_thread.wait)
     battery_worker.finished.connect(battery_worker.deleteLater)
-    battery_worker.finished.connect(app.quit)
-    polling_thread.finished.connect(polling_thread.deleteLater)
-    battery_worker.update_tray.connect(update_battery_status)
     polling_thread.start()
 
     # Create the clickable menu
