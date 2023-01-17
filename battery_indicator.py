@@ -50,18 +50,24 @@ class BatteryPoller(QObject):
         """
         battery_queue = []
         while self._is_running:
-            charging_status = GPIO.input(GPIO_PWR_PORT)
+            # True if the battery is being used (resets battery drain calc as well)
+            battery_power = GPIO.input(GPIO_PWR_PORT)
+            if not battery_power:
+                battery_queue = []
             
+            # Reads the voltage
             voltage = bus.read_word_data(I2C_ADDR, 2)
             voltage_in_bytes = struct.unpack('<H', struct.pack('>H', voltage))[0]
             battery_voltage = voltage_in_bytes * 1.25 / 1000 / 16
             
+            # Reads the charge
             charge = bus.read_word_data(I2C_ADDR, 4)
             charge_in_bytes = struct.unpack('<H', struct.pack('>H', charge))[0]
             battery_capacity = charge_in_bytes / 256
             if battery_capacity > 100:
                 battery_capacity = 100
-                
+            
+            # Compares charge values across several minutes to primitively calculate battery drain
             if len(battery_queue) <= 300:
                 battery_queue.append(battery_capacity)
             else:
@@ -72,7 +78,8 @@ class BatteryPoller(QObject):
                 time_remaining = 0.2
             time_remaining = battery_capacity / time_remaining
             
-            self.update_tray.emit(charging_status, battery_voltage, battery_capacity, time_remaining)
+            # Updates the GUI
+            self.update_tray.emit(battery_power, battery_voltage, battery_capacity, time_remaining)
             time.sleep(1)
             
         self.finished.emit()
@@ -82,9 +89,10 @@ def update_battery_status(on_battery_power, voltage, percent, time):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
-        battery_charging (bool): If the battery is charging it will show a charge symbol
+        on_battery_power (bool): If the battery is charging it will show a charge symbol
         voltage (float): The actual voltage of the battery
         percent (float): The converted estimated percent of the battery capacity
+        time (float): The number of minutes estimated to be left
     """
     volts = round(voltage, 2)
     charge = round(percent, 1)
@@ -107,6 +115,7 @@ def update_battery_status(on_battery_power, voltage, percent, time):
     tray_icon.setIcon(battery_icons[icon_to_display])
     tray_icon.setToolTip(str(charge) + '%, ' + str(volts) + 'V, ' + time_left)
     
+    # Dangerously low voltage
     if volts < 3.00:
         icon_to_display = 9
 
