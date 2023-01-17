@@ -23,7 +23,6 @@ class BatteryPoller(QObject):
         self._mutex = QMutex()
         self.update_tray.connect(update_battery_status)
     
-    @pyqtSlot
     def stop(self):
         """Updates the mutex if the app is closed
         """
@@ -31,7 +30,7 @@ class BatteryPoller(QObject):
         self.is_running = False
         self._mutex.unlock()
         
-    def is_running(self) -> bool:
+    def is_running(self):
         """Determines if the user stopped the thread
 
         Returns:
@@ -43,7 +42,7 @@ class BatteryPoller(QObject):
         finally:
             self._mutex.unlock()
 
-    def run(self) -> None:
+    def run(self):
         """Every second, polls the voltage, charge, and charging status
         """
         while self._is_running:
@@ -65,7 +64,7 @@ class BatteryPoller(QObject):
         self.finished.emit()
 
 
-def update_battery_status(battery_charging: bool, voltage: float, percent: float) -> None:
+def update_battery_status(battery_charging: bool, voltage: float, percent: float):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
