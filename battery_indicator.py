@@ -65,7 +65,7 @@ class BatteryPoller(QObject):
         self.finished.emit()
 
 
-def update_battery_status(battery_charging, voltage, percent):
+def update_battery_status(on_battery_power, voltage, percent):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
@@ -76,10 +76,10 @@ def update_battery_status(battery_charging, voltage, percent):
     volts = round(voltage, 2)
     charge = round(percent, 1)
     # If the battery isn't charging...
-    if not battery_charging:
+    if on_battery_power:
         # ...show the % if it's > 20,...
         if charge >= 20:
-            icon_to_display = ceil(voltage / (100 / 7))
+            icon_to_display = ceil(charge / (100 / 7))
         # ...or a danger symbol to prompt the user to charge
         else:
             icon_to_display = 9
