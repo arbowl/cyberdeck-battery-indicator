@@ -20,7 +20,7 @@ class BatteryPoller(QObject):
     
     def __init__(self):
         super().__init__()
-        self._is_running = False
+        self._is_running = True
         self._mutex = QMutex()
         self.update_tray.connect(update_battery_status)
     
