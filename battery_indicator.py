@@ -1,11 +1,13 @@
-import smbus
-import time
 import struct
+import time
 from math import ceil
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
-from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QMutex
+from time import sleep
+
 import RPi.GPIO as GPIO
+import smbus
+from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QAction, QApplication, QMenu, QSystemTrayIcon
 
 app = QApplication([])
 
@@ -77,17 +79,15 @@ def update_battery_status(on_battery_power, voltage, percent):
     charge = round(percent, 1)
     # If the battery isn't charging...
     if on_battery_power:
-        # ...show the % if it's > 20,...
-        if charge >= 20:
-            icon_to_display = ceil(charge / (100 / 7))
-        # ...or a danger symbol to prompt the user to charge
-        else:
-            icon_to_display = 9
+        icon_to_display = ceil(charge / (100 / 7))
     # If the battery is charging, show a charge icon
     else:
         icon_to_display = 8
     tray_icon.setIcon(battery_icons[icon_to_display])
-    tray_icon.setToolTip(str(charge) + '% ' + str(volts) + 'V')
+    tray_icon.setToolTip(str(charge) + '%, ' + str(volts) + 'V')
+    
+    if volts < 3.00:
+        icon_to_display = 9
 
 
 if __name__ == '__main__':
@@ -106,6 +106,7 @@ if __name__ == '__main__':
     
     # x728 UPS defaults
     I2C_ADDR = 0x36
+    GPIO_ASD_PORT = 26
     GPIO_BATT_PORT = 13
     GPIO_PWR_PORT = 6
     bus = smbus.SMBus(1)
