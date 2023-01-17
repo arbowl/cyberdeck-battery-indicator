@@ -134,6 +134,7 @@ if __name__ == '__main__':
     menu = QMenu()
     quit = QAction('Exit')
     quit.triggered.connect(battery_worker.stop)
+    quit.triggered.connect(app.quit)
     menu.addAction(quit)
     tray_icon.setContextMenu(menu)
 
