@@ -50,10 +50,8 @@ class BatteryPoller(QObject):
         """
         battery_queue = []
         while self.is_running():
-            # True if the battery is being used (resets battery drain calc as well)
+            # True if the battery is being used
             battery_power = GPIO.input(GPIO_PWR_PORT)
-            if not battery_power:
-                battery_queue = []
             
             # Reads the voltage
             voltage = bus.read_word_data(I2C_ADDR, 2)
@@ -78,6 +76,10 @@ class BatteryPoller(QObject):
                 time_remaining = 0.2
             time_remaining = battery_capacity / time_remaining
             
+            # If charging, reset the queue
+            if not battery_power:
+                battery_queue = []
+            
             # Updates the GUI
             self.update_tray.emit(battery_power, battery_voltage, battery_capacity, time_remaining)
             sleep(1)
@@ -94,29 +96,29 @@ def update_battery_status(on_battery_power, voltage, percent, time):
         percent (float): The converted estimated percent of the battery capacity
         time (float): The number of minutes estimated to be left
     """
-    volts = round(voltage, 2)
-    charge = round(percent, 1)
+    display_voltage = round(voltage, 2)
+    display_charge = round(percent, 1)
     # If the battery isn't charging...
     if on_battery_power:
-        icon_to_display = ceil(charge / (100 / 7))
-        time_left = int(round(time, 0))
-        if time_left < 60:
-            time_left = str(time_left) + ' min'
+        icon_to_display = ceil(display_charge / (100 / 7))
+        display_time = int(round(time, 0))
+        if display_time < 60:
+            display_time = str(display_time) + ' min'
         else:
-            hours_left = str(int(round(time_left / 60, 0)))
-            minutes_left = str(int(round(time_left % 60, 0)))
+            hours_left = str(int(round(display_time / 60, 0)))
+            minutes_left = str(int(round(display_time % 60, 0)))
             if len(minutes_left) == 1:
                 minutes_left = '0' + minutes_left
-            time_left = hours_left + ':' + minutes_left + ' hrs'
+            display_time = hours_left + ':' + minutes_left + ' hrs'
     # If the battery is charging, show a charge icon
     else:
         icon_to_display = 8
-        time_left = 'Charging'
+        display_time = 'Charging'
     tray_icon.setIcon(battery_icons[icon_to_display])
-    tray_icon.setToolTip(str(charge) + '%, ' + str(volts) + 'V, ' + time_left)
+    tray_icon.setToolTip(str(display_charge) + '%, ' + str(display_voltage) + 'V, ' + display_time)
     
     # Dangerously low voltage
-    if volts < 3.00:
+    if display_voltage < 3.00:
         icon_to_display = 9
 
 
