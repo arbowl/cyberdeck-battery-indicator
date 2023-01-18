@@ -5,10 +5,11 @@ from time import sleep
 
 import RPi.GPIO as GPIO
 import smbus
-from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QApplication, QMenu, QSystemTrayIcon
 
+# Initializes the app; placed here to buffer init time
 app = QApplication([])
 
 class BatteryPoller(QObject):
@@ -22,7 +23,7 @@ class BatteryPoller(QObject):
     
     def __init__(self):
         super().__init__()
-        self._is_running = True
+        self._running = True
         self._mutex = QMutex()
         self.update_tray.connect(update_battery_status)
     
@@ -30,7 +31,7 @@ class BatteryPoller(QObject):
         """Updates the mutex if the app is closed
         """
         self._mutex.lock()
-        self.is_running = False
+        self._running = False
         self._mutex.unlock()
         
     def is_running(self):
@@ -41,53 +42,58 @@ class BatteryPoller(QObject):
         """
         try:
             self._mutex.lock()
-            return self._is_running
+            return self._running
         finally:
             self._mutex.unlock()
 
     def run(self):
-        """Every second, polls the voltage, charge, and charging status
+        """Every second, checks the charging status, battery voltage, battery charge,
+        and estimates the remaining battery life. Loops until the user exits
         """
+        # A queue to primitively calculate remaining battery life (time)
         battery_queue = []
+        # The length of time in seconds to get a delta capacity value
+        seconds_of_capacity_polling = 300
         while self.is_running():
             # True if the battery is being used
             battery_power = GPIO.input(GPIO_PWR_PORT)
             
             # Reads the voltage
-            voltage = bus.read_word_data(I2C_ADDR, 2)
-            voltage_in_bytes = struct.unpack('<H', struct.pack('>H', voltage))[0]
-            battery_voltage = voltage_in_bytes * 1.25 / 1000 / 16
+            voltage_address = bus.read_word_data(I2C_ADDR, 2)
+            voltage_as_a_float = struct.unpack('<H', struct.pack('>H', voltage_address))[0]
+            battery_voltage = voltage_as_a_float * 1.25 / 1000 / 16
             
             # Reads the charge
-            charge = bus.read_word_data(I2C_ADDR, 4)
-            charge_in_bytes = struct.unpack('<H', struct.pack('>H', charge))[0]
-            battery_capacity = charge_in_bytes / 256
-            if battery_capacity > 100:
-                battery_capacity = 100
+            charge_address = bus.read_word_data(I2C_ADDR, 4)
+            charge_as_a_float = struct.unpack('<H', struct.pack('>H', charge_address))[0]
+            battery_charge = charge_as_a_float / 256
+            if battery_charge > 100:
+                battery_charge = 100
             
-            # Compares charge values across several minutes to primitively calculate battery drain
-            if len(battery_queue) <= 300:
-                battery_queue.append(battery_capacity)
+            # Calculates battery drain duration
+            if len(battery_queue) <= seconds_of_capacity_polling:
+                battery_queue.append(battery_charge)
             else:
                 battery_queue.pop(0)
-                battery_queue.append(battery_capacity)
-            time_remaining = (battery_queue[0] - battery_queue[-1]) / len(battery_queue) * 60
-            if time_remaining == 0:
-                time_remaining = 0.2
-            time_remaining = battery_capacity / time_remaining
+                battery_queue.append(battery_charge)
+            battery_time = (battery_queue[0] - battery_queue[-1]) / len(battery_queue) * 60
+            # Estimation during the first ~min when there's no change to avoid divide-by-zero errors
+            if battery_time == 0:
+                battery_time = 0.2
+            battery_time = battery_charge / battery_time
             
             # If charging, reset the queue
             if not battery_power:
                 battery_queue = []
             
             # Updates the GUI
-            self.update_tray.emit(battery_power, battery_voltage, battery_capacity, time_remaining)
+            self.update_tray.emit(battery_power, battery_voltage, battery_charge, battery_time)
             sleep(1)
             
         self.finished.emit()
 
 
-def update_battery_status(on_battery_power, voltage, percent, time):
+def update_battery_status(on_battery_power, voltage, charge, time):
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
@@ -97,7 +103,7 @@ def update_battery_status(on_battery_power, voltage, percent, time):
         time (float): The number of minutes estimated to be left
     """
     display_voltage = round(voltage, 2)
-    display_charge = round(percent, 1)
+    display_charge = round(charge, 1)
     # If the battery isn't charging...
     if on_battery_power:
         icon_to_display = ceil(display_charge / (100 / 7))
@@ -114,6 +120,8 @@ def update_battery_status(on_battery_power, voltage, percent, time):
     else:
         icon_to_display = 8
         display_time = 'Charging'
+    
+    # Update visual elements
     tray_icon.setIcon(battery_icons[icon_to_display])
     tray_icon.setToolTip(str(display_charge) + '%, ' + str(display_voltage) + 'V, ' + display_time)
     
