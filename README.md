@@ -13,5 +13,7 @@ This launches at startup and displays a battery icon on the taskbar to show the 
 
 ## Credits
 I first realized a taskbar battery indicator was feasible via this repo, and I used their icons: https://github.com/ppyne/crowPi-L_BatteryStatus
+
 I used code from the Geekworm repo to figure out how to obtain charge info: https://github.com/geekworm-com/x728
+
 This tutorial is helpful for creating startup routines: https://www.makeuseof.com/how-to-run-a-raspberry-pi-program-script-at-startup/
