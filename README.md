@@ -4,6 +4,8 @@ A GUI battery indicator for raspberry pi and x728 UPS
 ## Background
 I build a RasPi 4 cyberdeck and used the x728 UPS for the battery supply. It worked great, but I wanted a way to monitor the battery without having to open the provided x728bat.py script (which to their credit is hugely useful as-is and needed to figure out how to poll the UPS).
 
+I made this for personal use in my free time, so please be patient if there are any bugs. Feel free to reach out with any improvements, questions, or suggestions: arbowl@tutanota.com
+
 This launches at startup and displays a battery icon on the taskbar to show the battery status. 
 
 ## How to use
