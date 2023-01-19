@@ -17,7 +17,7 @@ class BatteryPoller(QObject):
         QObject (_type_): PyQt5 compatibility object
     """
     finished = pyqtSignal()
-    update_tray = pyqtSignal(bool, float, float)
+    update_tray = pyqtSignal(bool, float, float, float)
     
     def __init__(self):
         super().__init__()
@@ -148,10 +148,10 @@ if __name__ == '__main__':
     GPIO_BATT_PORT = 13
     GPIO_PWR_PORT = 6
     bus = smbus.SMBus(1)
+    GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(GPIO_BATT_PORT, GPIO.OUT)
     GPIO.setup(GPIO_PWR_PORT, GPIO.IN)
-    GPIO.setwarnings(False)
     
     # Create the application and tray icon
     app.setQuitOnLastWindowClosed(False)
