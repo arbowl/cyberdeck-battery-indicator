@@ -1,5 +1,4 @@
 import struct
-from math import ceil
 from time import sleep
 
 import RPi.GPIO as GPIO
@@ -105,8 +104,8 @@ def update_battery_status(on_battery_power, voltage, charge, time):
     display_charge = round(charge, 1)
     # If the battery isn't charging...
     if on_battery_power:
-        icon_to_display = ceil(display_charge / (100 / 7))
-        display_time = abs(int(round(time, 0)))
+        icon_to_display = round(display_charge / (100 / 7))
+        display_time = abs(int(round(time)))
         if display_time < 60:
             display_time = str(display_time) + ' min'
         else:
