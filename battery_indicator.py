@@ -129,17 +129,18 @@ def update_battery_status(on_battery_power, voltage, charge, time):
 
 
 if __name__ == '__main__':
+    dir = '/home/pi/cyberdeck-battery-indicator'
     battery_icons = [
-            QIcon('battery_0.png'),
-            QIcon('battery_1.png'),
-            QIcon('battery_2.png'),
-            QIcon('battery_3.png'),
-            QIcon('battery_4.png'),
-            QIcon('battery_5.png'),
-            QIcon('battery_6.png'),
-            QIcon('battery_7.png'),
-            QIcon('battery_charging.png'),
-            QIcon('battery_alert.png')
+            QIcon(dir + 'battery_0.png'),
+            QIcon(dir + 'battery_1.png'),
+            QIcon(dir + 'battery_2.png'),
+            QIcon(dir + 'battery_3.png'),
+            QIcon(dir + 'battery_4.png'),
+            QIcon(dir + 'battery_5.png'),
+            QIcon(dir + 'battery_6.png'),
+            QIcon(dir + 'battery_7.png'),
+            QIcon(dir + 'battery_charging.png'),
+            QIcon(dir + 'battery_alert.png')
     ]
     
     # x728 UPS defaults
