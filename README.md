@@ -16,10 +16,15 @@ This launches at startup and displays a battery icon on the taskbar to show the 
 5. Type 'chmod 755 battery_indicator.py' and press enter
 6. Type 'sudo nano /etc/xdg/autostart/display.desktop'
 7. Type the following:
+
        [Desktop Entry]
+       
        Name=pi                     (or replace "pi" with your username--don't type this message in parentheses though)
+       
        Exec=/usr/bin/python3 /home/pi/cyberdeck-battery-indicator/battery_indicator.py
+       
 8. Press ctrl+X, then press Y, then press enter
+9. Done! It should now run at startup. If it doesn't work for you, cd to the directory, type "python3 battery_indicator.py", and check for error messages. Most likely there is a path/directory or permission error.
 
 This will download my code and the icons to a folder called "cyberdeck-battery-indicator", give users read-execute permission, then set it to run at startup.
 
