@@ -104,7 +104,9 @@ def update_battery_status(on_battery_power, voltage, charge, time):
     display_charge = round(charge, 1)
     # If the battery isn't charging...
     if on_battery_power:
+        # This converts a % to a number from 0-7 which matches a battery level icon
         icon_to_display = round(display_charge / (100 / 7))
+        # And the rest formats the time remaining value
         display_time = abs(int(round(time)))
         if display_time < 60:
             display_time = str(display_time) + ' min'
@@ -116,32 +118,32 @@ def update_battery_status(on_battery_power, voltage, charge, time):
             display_time = hours_left + ':' + minutes_left + ' hrs'
     # If the battery is charging, show a charge icon
     else:
-        icon_to_display = 8
+        icon_to_display = 'Charging'
         display_time = 'Charging'
-    
-    # Update visual elements
-    tray_icon.setIcon(battery_icons[icon_to_display])
-    tray_icon.setToolTip(str(display_charge) + '%, ' + str(display_voltage) + 'V, ' + display_time)
-    
+        
     # Dangerously low voltage
     if display_voltage < 3.00:
-        icon_to_display = 9
-
+        icon_to_display = 'Warning'
+    
+    # Update visual elements
+    tray_icon.setIcon(battery_state_icons[icon_to_display])
+    tray_icon.setToolTip(str(display_charge) + '%, ' + str(display_voltage) + 'V, ' + display_time)
+    
 
 if __name__ == '__main__':
     dir = '/home/pi/cyberdeck-battery-indicator'
-    battery_icons = [
-            QIcon(dir + 'battery_0.png'),
-            QIcon(dir + 'battery_1.png'),
-            QIcon(dir + 'battery_2.png'),
-            QIcon(dir + 'battery_3.png'),
-            QIcon(dir + 'battery_4.png'),
-            QIcon(dir + 'battery_5.png'),
-            QIcon(dir + 'battery_6.png'),
-            QIcon(dir + 'battery_7.png'),
-            QIcon(dir + 'battery_charging.png'),
-            QIcon(dir + 'battery_alert.png')
-    ]
+    battery_state_icons = {
+            0 : QIcon(dir + 'battery_0.png'),
+            1 : QIcon(dir + 'battery_1.png'),
+            2 : QIcon(dir + 'battery_2.png'),
+            3 : QIcon(dir + 'battery_3.png'),
+            4 : QIcon(dir + 'battery_4.png'),
+            5 : QIcon(dir + 'battery_5.png'),
+            6 : QIcon(dir + 'battery_6.png'),
+            7 : QIcon(dir + 'battery_7.png'),
+            'Charging' : QIcon(dir + 'battery_charging.png'),
+            'Warning' :QIcon(dir + 'battery_alert.png')
+    }
     
     # x728 UPS defaults
     I2C_ADDR = 0x36
@@ -157,7 +159,7 @@ if __name__ == '__main__':
     # Create the application and tray icon
     app.setQuitOnLastWindowClosed(False)
     tray_icon = QSystemTrayIcon()
-    tray_icon.setIcon(battery_icons[9])
+    tray_icon.setIcon(battery_state_icons[9])
     tray_icon.setVisible(True)
 
     # Create the worker thread
