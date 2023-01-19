@@ -1,10 +1,9 @@
 import struct
-import time
 from math import ceil
 from time import sleep
 
 import RPi.GPIO as GPIO
-import smbus
+import smbus2 as smbus
 from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QApplication, QMenu, QSystemTrayIcon
