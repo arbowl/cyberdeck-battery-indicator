@@ -24,7 +24,7 @@ This launches at startup and displays a battery icon on the taskbar to show the 
        Exec=/usr/bin/python3 /home/pi/cyberdeck-battery-indicator/battery_indicator.py
        
 8. Press ctrl+X, then press Y, then press enter
-9. Done! It should now run at startup. If it doesn't work for you, cd to the directory, type "python3 battery_indicator.py", and check for error messages. Most likely there is a path/directory or permission error.
+9. Done! It should now run at startup. If it doesn't work for you, cd to the directory (e.g. "cd /home/pi/cyberdeck-battery-indicator"), type "python3 battery_indicator.py", and check for error messages. Most likely there is a path/directory or permission error.
 
 This will download my code and the icons to a folder called "cyberdeck-battery-indicator", give users read-execute permission, then set it to run at startup.
 
