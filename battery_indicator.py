@@ -107,7 +107,7 @@ def update_battery_status(on_battery_power, voltage, charge, time):
     # If the battery isn't charging...
     if on_battery_power:
         icon_to_display = ceil(display_charge / (100 / 7))
-        display_time = int(round(time, 0))
+        display_time = abs(int(round(time, 0)))
         if display_time < 60:
             display_time = str(display_time) + ' min'
         else:
