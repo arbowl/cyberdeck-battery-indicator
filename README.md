@@ -8,10 +8,22 @@ I made this for personal use in my free time, so please be patient if there are 
 
 This launches at startup and displays a battery icon on the taskbar to show the battery status. 
 
-## How to use
-1. Clone the repo (via 'git clone https://github.com/arbowl/cyberdeck-battery-indicator')
-2. Drag the folder to a suitable location
-3. Create a startup routine via /etc/xdg/autostart/display.desktop
+## How to install
+1. Open a terminal
+2. Type 'cd /home/pi' and press enter
+3. Type 'git clone https://github.com/arbowl/cyberdeck-battery-indicator' and press enter
+4. Type 'cd cyberdeck-battery-indicator' and press enter
+5. Type 'chmod 755 battery_indicator.py' and press enter
+6. Type 'sudo nano /etc/xdg/autostart/display.desktop'
+7. Type the following:
+       [Desktop Entry]
+       Name=pi                     (or replace "pi" with your username--don't type this message in parentheses though)
+       Exec=/usr/bin/python3 /home/pi/cyberdeck-battery-indicator/battery_indicator.py
+8. Press ctrl+X, then press Y, then press enter
+
+This will download my code and the icons to a folder called "cyberdeck-battery-indicator", give users read-execute permission, then set it to run at startup.
+
+If you rename the folder or choose a different directory, be sure to also change the variable "dir" under "if __name__ == '__main__':" in battery_indicator.py to reflect this!
 
 ## Credits
 I first realized a taskbar battery indicator was feasible via this repo, and I used their icons: https://github.com/ppyne/crowPi-L_BatteryStatus
