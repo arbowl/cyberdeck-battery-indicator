@@ -131,7 +131,7 @@ def update_battery_status(on_battery_power, voltage, charge, time):
     
 
 if __name__ == '__main__':
-    dir = '/home/pi/cyberdeck-battery-indicator'
+    dir = '/home/pi/cyberdeck-battery-indicator/'
     battery_state_icons = {
             0 : QIcon(dir + 'battery_0.png'),
             1 : QIcon(dir + 'battery_1.png'),
