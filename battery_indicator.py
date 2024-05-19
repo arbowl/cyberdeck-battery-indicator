@@ -11,7 +11,8 @@ https://github.com/arbowl/cyberdeck-battery-indicator/
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from os.path import join
+from os import getcwd
+from os.path import join, dirname, abspath
 from struct import pack, unpack
 from time import sleep
 
@@ -21,7 +22,8 @@ from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QApplication, QMenu, QSystemTrayIcon
 
-ICON_DIR = "/home/pi/cyberdeck-battery-indicator/icons/"
+ICON_DIR = join(dirname(abspath(__file__)), "icons")
+app = QApplication([])
 
 
 class GpioPins(IntEnum):
@@ -54,7 +56,7 @@ class BatteryPoller(QObject):
     """The threaded worker object which polls the battery in the background"""
 
     finished = pyqtSignal()
-    update_tray = pyqtSignal(QSystemTrayIcon, bool, float, float, float)
+    update_tray = pyqtSignal(QSystemTrayIcon, Battery)
     battery_state_icons = {
         0: QIcon(join(ICON_DIR, "battery_0.png")),
         1: QIcon(join(ICON_DIR, "battery_1.png")),
@@ -100,16 +102,16 @@ class BatteryPoller(QObject):
     def calculate_battery_state(self) -> Battery:
         """Reads the GPIO pins to determine the battery status"""
         status = Battery()
-        Battery.power = gpio_input(GpioPins.GPIO_PWR_PORT)
+        status.power = gpio_input(GpioPins.GPIO_PWR_PORT)
         voltage_address = self.bus.read_word_data(GpioPins.I2C_ADDR, 2)
         voltage_as_a_float = unpack("<H", pack(">H", voltage_address))[0]
-        Battery.voltage = voltage_as_a_float * 1.25 / 1000 / 16
+        status.voltage = voltage_as_a_float * 1.25 / 1000 / 16
         charge_address = self.bus.read_word_data(GpioPins.I2C_ADDR, 4)
         charge_as_a_float = unpack("<H", pack(">H", charge_address))[0]
-        Battery.charge = charge_as_a_float / 256
-        Battery.charge = min(Battery.charge, 100)
-        self.battery_queue.append(Battery.charge)
-        Battery.time = (
+        status.charge = charge_as_a_float / 256
+        status.charge = min(status.charge, 100)
+        self.battery_queue.append(status.charge)
+        status.time = (
             (self.battery_queue[0] - self.battery_queue[-1])
             / len(self.battery_queue)
             * 60
@@ -130,13 +132,7 @@ class BatteryPoller(QObject):
             battery.time = battery.charge / battery.time
             if not battery.power:
                 self.battery_queue.clear()
-            self.update_tray.emit(
-                self.tray_icon,
-                battery.power,
-                battery.voltage,
-                battery.charge,
-                battery.time,
-            )
+            self.update_tray.emit(self.tray_icon, battery)
             sleep(1)
         self.finished.emit()
 
@@ -180,8 +176,10 @@ def configure_gpio() -> None:
     setup(GpioPins.GPIO_PWR_PORT, IN)
 
 
-def spawn_icon_thread(application: QApplication) -> None:
-    """Spawns the thread which updates the system tray icon"""
+def main() -> None:
+    """Launches the app and spawns the update thread"""
+    sleep(5)
+    configure_gpio()
     polling_thread = QThread()
     battery_worker = BatteryPoller()
     battery_worker.moveToThread(polling_thread)
@@ -192,17 +190,9 @@ def spawn_icon_thread(application: QApplication) -> None:
     menu = QMenu()
     quit_app = QAction("Exit")
     quit_app.triggered.connect(battery_worker.stop)
-    quit_app.triggered.connect(application.quit)
+    quit_app.triggered.connect(app.quit)
     menu.addAction(quit_app)
     battery_worker.tray_icon.setContextMenu(menu)
-
-
-def main() -> None:
-    """Launches the app and spawns the update thread"""
-    app = QApplication([])
-    sleep(5)
-    configure_gpio()
-    spawn_icon_thread(app)
     app.setQuitOnLastWindowClosed(False)
     app.exec()
 
