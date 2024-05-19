@@ -1,38 +1,93 @@
-import struct
+"""Battery Indicator
+
+I made this for the x728 UPS to show the battery level in the system tray, because
+I found that it was difficult to use it unplugged without knowing how much battery
+was left. The scripts that come with the device are useful for seeing the battery
+in the terminal, but this makes it more accessible.
+
+https://github.com/arbowl/cyberdeck-battery-indicator/
+"""
+
+from collections import deque
+from dataclasses import dataclass
+from enum import Enum, IntEnum
+from os import getcwd
+from os.path import join, dirname, abspath
+from struct import pack, unpack
 from time import sleep
 
-import RPi.GPIO as GPIO
-import smbus2 as smbus
+from RPi.GPIO import input as gpio_input, setwarnings, setup, setmode, BCM, OUT, IN
+from smbus2 import SMBus
 from PyQt5.QtCore import QMutex, QObject, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QApplication, QMenu, QSystemTrayIcon
 
-# Initializes the app; placed here to buffer init time
+ICON_DIR = join(dirname(abspath(__file__)), "icons")
 app = QApplication([])
 
-class BatteryPoller(QObject):
-    """The threaded worker object which polls the battery in the background
 
-    Args:
-        QObject (_type_): PyQt5 compatibility object
-    """
+class GpioPins(IntEnum):
+    """Pin constants for the RasPi and x728"""
+
+    I2C_ADDR = 0x36
+    GPIO_ASD_PORT = 26
+    GPIO_BATT_PORT = 13
+    GPIO_PWR_PORT = 6
+
+
+class SpecialIcons(str, Enum):
+    """Class to hold non-numerical battery statuses"""
+
+    WARNING = "Warning"
+    CHARGING = "Charging"
+
+
+@dataclass
+class Battery:
+    """Stores battery status information"""
+
+    time: float = 0.0
+    power: bool = False
+    charge: float = 0.0
+    voltage: float = 0.0
+
+
+class BatteryPoller(QObject):
+    """The threaded worker object which polls the battery in the background"""
+
     finished = pyqtSignal()
-    update_tray = pyqtSignal(bool, float, float, float)
-    
-    def __init__(self):
+    update_tray = pyqtSignal(QSystemTrayIcon, Battery)
+    battery_state_icons = {
+        0: QIcon(join(ICON_DIR, "battery_0.png")),
+        1: QIcon(join(ICON_DIR, "battery_1.png")),
+        2: QIcon(join(ICON_DIR, "battery_2.png")),
+        3: QIcon(join(ICON_DIR, "battery_3.png")),
+        4: QIcon(join(ICON_DIR, "battery_4.png")),
+        5: QIcon(join(ICON_DIR, "battery_5.png")),
+        6: QIcon(join(ICON_DIR, "battery_6.png")),
+        7: QIcon(join(ICON_DIR, "battery_7.png")),
+        SpecialIcons.WARNING: QIcon(join(ICON_DIR, "battery_alert.png")),
+        SpecialIcons.CHARGING: QIcon(join(ICON_DIR, "battery_charging.png")),
+    }
+
+    def __init__(self) -> None:
         super().__init__()
         self._running = True
         self._mutex = QMutex()
         self.update_tray.connect(update_battery_status)
-    
-    def stop(self):
-        """Updates the mutex if the app is closed
-        """
+        self.bus = SMBus(1)
+        self.tray_icon = QSystemTrayIcon()
+        self.tray_icon.setIcon(BatteryPoller.battery_state_icons[SpecialIcons.WARNING])
+        self.tray_icon.setVisible(True)
+        self.battery_queue: deque = deque(maxlen=300)
+
+    def stop(self) -> None:
+        """Updates the mutex if the app is closed"""
         self._mutex.lock()
         self._running = False
         self._mutex.unlock()
-        
-    def is_running(self):
+
+    def is_running(self) -> bool:
         """Determines if the user stopped the thread
 
         Returns:
@@ -44,141 +99,103 @@ class BatteryPoller(QObject):
         finally:
             self._mutex.unlock()
 
-    def run(self):
+    def calculate_battery_state(self) -> Battery:
+        """Reads the GPIO pins to determine the battery status"""
+        status = Battery()
+        status.power = gpio_input(GpioPins.GPIO_PWR_PORT)
+        voltage_address = self.bus.read_word_data(GpioPins.I2C_ADDR, 2)
+        voltage_as_a_float = unpack("<H", pack(">H", voltage_address))[0]
+        status.voltage = voltage_as_a_float * 1.25 / 1000 / 16
+        charge_address = self.bus.read_word_data(GpioPins.I2C_ADDR, 4)
+        charge_as_a_float = unpack("<H", pack(">H", charge_address))[0]
+        status.charge = charge_as_a_float / 256
+        status.charge = min(status.charge, 100)
+        self.battery_queue.append(status.charge)
+        status.time = (
+            (self.battery_queue[0] - self.battery_queue[-1])
+            / len(self.battery_queue)
+            * 60
+        )
+        return status
+
+    def run(self) -> None:
         """Every second, checks the charging status, battery voltage, battery charge,
-        and estimates the remaining battery life. Loops until the user exits
+        and estimates the remaining battery life. Loops until the user exits. The
+        length of the battery queue can be set to anything. The battery estimation is
+        meant to be a simple approximation and is linear; this does not implement
+        CC, CV, curves, or anything more advanced than a simple y=mx+b calculation!
         """
-        # A queue to primitively calculate remaining battery life (time)
-        battery_queue = []
-        # The length of time in seconds to get a delta capacity value
-        seconds_of_capacity_polling = 300
         while self.is_running():
-            # True if the battery is being used
-            battery_power = GPIO.input(GPIO_PWR_PORT)
-            
-            # Reads the voltage
-            voltage_address = bus.read_word_data(I2C_ADDR, 2)
-            voltage_as_a_float = struct.unpack('<H', struct.pack('>H', voltage_address))[0]
-            battery_voltage = voltage_as_a_float * 1.25 / 1000 / 16
-            
-            # Reads the charge
-            charge_address = bus.read_word_data(I2C_ADDR, 4)
-            charge_as_a_float = struct.unpack('<H', struct.pack('>H', charge_address))[0]
-            battery_charge = charge_as_a_float / 256
-            if battery_charge > 100:
-                battery_charge = 100
-            
-            # Calculates battery drain duration
-            if len(battery_queue) <= seconds_of_capacity_polling:
-                battery_queue.append(battery_charge)
-            else:
-                battery_queue.pop(0)
-                battery_queue.append(battery_charge)
-            battery_time = (battery_queue[0] - battery_queue[-1]) / len(battery_queue) * 60
-            # Estimation during the first ~min when there's no change to avoid divide-by-zero errors
-            if battery_time == 0:
-                battery_time = 0.2
-            battery_time = battery_charge / battery_time
-            
-            # If charging, reset the queue
-            if not battery_power:
-                battery_queue = []
-            
-            # Updates the GUI
-            self.update_tray.emit(battery_power, battery_voltage, battery_charge, battery_time)
+            battery = self.calculate_battery_state()
+            # Estimation during the first ~min to avoid divide-by-zero errors
+            battery.time = 0.2 if not battery.time else battery.time
+            battery.time = battery.charge / battery.time
+            if not battery.power:
+                self.battery_queue.clear()
+            self.update_tray.emit(self.tray_icon, battery)
             sleep(1)
-            
         self.finished.emit()
 
 
-def update_battery_status(on_battery_power, voltage, charge, time):
+def update_battery_status(icon: QSystemTrayIcon, battery: Battery) -> None:
     """Updates the GUI according to the charging status and battery capacity
 
     Args:
-        on_battery_power (bool): If the battery is charging it will show a charge symbol
-        voltage (float): The actual voltage of the battery
-        percent (float): The converted estimated percent of the battery capacity
-        time (float): The number of minutes estimated to be left
+        icon (QSystemTrayicon): The tray icon to update
+        battery (Battery): Battery charge, voltage, time, and plugged-in (power) status
     """
-    display_voltage = round(voltage, 2)
-    display_charge = round(charge, 1)
-    # If the battery isn't charging...
-    if on_battery_power:
+    display_voltage = round(battery.voltage, 2)
+    display_charge = round(battery.charge, 1)
+    if battery.power:
         # This converts a % to a number from 0-7 which matches a battery level icon
-        icon_to_display = round(display_charge / (100 / 7))
-        # And the rest formats the time remaining value
-        display_time = abs(int(round(time)))
-        if display_time < 60:
-            display_time = str(display_time) + ' min'
+        icon_to_display: str | int = round(display_charge / (100 / 7))
+        time_remaining = abs(int(round(battery.time)))
+        if time_remaining < 60:
+            display_time = str(time_remaining) + " min"
         else:
-            hours_left = str(int(round(display_time / 60, 0)))
-            minutes_left = str(int(round(display_time % 60, 0)))
-            if len(minutes_left) == 1:
-                minutes_left = '0' + minutes_left
-            display_time = hours_left + ':' + minutes_left + ' hrs'
-    # If the battery is charging, show a charge icon
+            hours_left = str(int(round(time_remaining / 60, 0)))
+            mins_left = str(int(round(time_remaining % 60, 0)))
+            mins_left = "0" + mins_left if len(mins_left) == 1 else mins_left
+            display_time = hours_left + ":" + mins_left + " hrs"
     else:
-        icon_to_display = 'Charging'
-        display_time = 'Charging'
-        
-    # Dangerously low voltage
+        icon_to_display = SpecialIcons.CHARGING
+        display_time = SpecialIcons.CHARGING
     if display_voltage < 3.00:
-        icon_to_display = 'Warning'
-    
-    # Update visual elements
-    tray_icon.setIcon(battery_state_icons[icon_to_display])
-    tray_icon.setToolTip(str(display_charge) + '%, ' + str(display_voltage) + 'V, ' + display_time)
-    
+        icon_to_display = SpecialIcons.WARNING
+    icon.setIcon(BatteryPoller.battery_state_icons[icon_to_display])
+    icon.setToolTip(
+        str(display_charge) + "%, " + str(display_voltage) + "V, " + display_time
+    )
 
-if __name__ == '__main__':
-    dir = '/home/pi/cyberdeck-battery-indicator/'
-    battery_state_icons = {
-            0 : QIcon(dir + 'battery_0.png'),
-            1 : QIcon(dir + 'battery_1.png'),
-            2 : QIcon(dir + 'battery_2.png'),
-            3 : QIcon(dir + 'battery_3.png'),
-            4 : QIcon(dir + 'battery_4.png'),
-            5 : QIcon(dir + 'battery_5.png'),
-            6 : QIcon(dir + 'battery_6.png'),
-            7 : QIcon(dir + 'battery_7.png'),
-            'Charging' : QIcon(dir + 'battery_charging.png'),
-            'Warning' :QIcon(dir + 'battery_alert.png')
-    }
-    
-    # x728 UPS defaults
-    I2C_ADDR = 0x36
-    GPIO_ASD_PORT = 26
-    GPIO_BATT_PORT = 13
-    GPIO_PWR_PORT = 6
-    bus = smbus.SMBus(1)
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(GPIO_BATT_PORT, GPIO.OUT)
-    GPIO.setup(GPIO_PWR_PORT, GPIO.IN)
-    
-    # Create the application and tray icon
-    app.setQuitOnLastWindowClosed(False)
-    tray_icon = QSystemTrayIcon()
-    tray_icon.setIcon(battery_state_icons[9])
-    tray_icon.setVisible(True)
 
-    # Create the worker thread
+def configure_gpio() -> None:
+    """Configures the GPIO in/out pins"""
+    setwarnings(False)
+    setmode(BCM)
+    setup(GpioPins.GPIO_BATT_PORT, OUT)
+    setup(GpioPins.GPIO_PWR_PORT, IN)
+
+
+def main() -> None:
+    """Launches the app and spawns the update thread"""
+    sleep(5)
+    configure_gpio()
     polling_thread = QThread()
     battery_worker = BatteryPoller()
     battery_worker.moveToThread(polling_thread)
     polling_thread.started.connect(battery_worker.run)
     battery_worker.finished.connect(polling_thread.quit)
-    battery_worker.finished.connect(polling_thread.wait)
     battery_worker.finished.connect(battery_worker.deleteLater)
     polling_thread.start()
-
-    # Create the clickable menu
     menu = QMenu()
-    quit = QAction('Exit')
-    quit.triggered.connect(battery_worker.stop)
-    quit.triggered.connect(app.quit)
-    menu.addAction(quit)
-    tray_icon.setContextMenu(menu)
-
-    # Start the execution loop
+    quit_app = QAction("Exit")
+    quit_app.triggered.connect(battery_worker.stop)
+    quit_app.triggered.connect(app.quit)
+    menu.addAction(quit_app)
+    battery_worker.tray_icon.setContextMenu(menu)
+    app.setQuitOnLastWindowClosed(False)
     app.exec()
+
+
+if __name__ == "__main__":
+    main()
